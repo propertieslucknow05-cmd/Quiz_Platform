@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { GameState, MediaItem, Team, SourceType, AnswerSubmission, QuizSettings, GamePhase, AudienceReaction } from '@/types/quiz';
-import { SEED_MEDIA_ITEMS } from './media-seed';
+import { SEED_MEDIA_ITEMS, interleavedFairShuffle } from './media-seed';
 import { soundManager } from './audio';
 
 const INITIAL_TEAMS: Team[] = [
@@ -153,7 +153,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
 
       startQuiz: () => {
         const { mediaList, settings, teams } = get();
-        const shuffled = [...mediaList].sort(() => Math.random() - 0.5);
+        const shuffled = interleavedFairShuffle(mediaList);
         const activeTeamId = teams.length > 0 ? teams[0].id : undefined;
         const isUntimed = settings.questionDuration === 0;
 
@@ -410,8 +410,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       },
 
       shuffleMediaList: () => {
-        const shuffled = [...get().mediaList].sort(() => Math.random() - 0.5);
-        set({ mediaList: shuffled });
+        set({ mediaList: interleavedFairShuffle(get().mediaList) });
       },
 
       addMediaItem: (item: MediaItem) => set(state => ({
@@ -538,7 +537,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       importFullState: (newState: GameState) => set(newState)
     }),
     {
-      name: 'quiz_platform_storage_v4',
+      name: 'quiz_platform_storage_v5',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         mediaList: state.mediaList,
