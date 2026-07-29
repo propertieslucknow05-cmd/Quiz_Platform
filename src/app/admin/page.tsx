@@ -9,10 +9,11 @@ import { exportScoresToCSV, generatePrintableReport } from '@/lib/pdf-export';
 import { NavigationHeader } from '@/components/ui/NavigationHeader';
 import { ParticleCanvas } from '@/components/background/ParticleCanvas';
 import { MediaItem, SourceType, MediaType, Team } from '@/types/quiz';
+import { HYPERREALISTIC_50_AI_PACK } from '@/lib/media-seed';
 import { 
   UploadCloud, Folder, FileImage, FileVideo, Search, Filter, Trash2, Edit3,
   Sparkles, Download, BarChart2, Plus, CheckCircle, Bot, UserCheck, RefreshCw, 
-  FileText, Users, Save, Check, CheckSquare, Square, X, MoveRight
+  FileText, Users, Save, Check, CheckSquare, Square, X, MoveRight, Package, FolderSearch
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -56,11 +57,23 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     initSyncEngine();
+    // Auto scan local disk folders on mount
+    store.scanLocalDiskFolders();
   }, []);
 
   const showNotification = (msg: string) => {
     setUploadStatusMsg(msg);
     setTimeout(() => setUploadStatusMsg(null), 4000);
+  };
+
+  const handleScanLocalDisk = async () => {
+    const count = await store.scanLocalDiskFolders();
+    showNotification(`📁 Scanned local disk folders! Loaded ${count} items from public/media/AI & HUMAN`);
+  };
+
+  const handleLoad50AIPack = () => {
+    store.bulkAddMedia(HYPERREALISTIC_50_AI_PACK);
+    showNotification('✅ Loaded 50 Hyperrealistic AI Photos Pack into /AI group!');
   };
 
   const processFileList = async (files: File[]) => {
@@ -119,39 +132,57 @@ export default function AdminDashboardPage() {
           console.error('Failed to parse ZIP archive:', err);
         }
       } else {
-        // Handle regular files
-        const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
-        const isImage = file.type.startsWith('image/') || file.name.match(/\.(jpg|jpeg|png|webp|gif)$/i);
-        if (!isImage && !isVideo) continue;
+        // Handle regular files: Post to local upload API to save directly to local hard drive!
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          let itemSource: SourceType = 'AI';
+          if (targetUploadGroup === 'AI') {
+            itemSource = 'AI';
+          } else if (targetUploadGroup === 'HUMAN') {
+            itemSource = 'HUMAN';
+          } else {
+            const isHuman = file.name.toLowerCase().includes('human') || file.webkitRelativePath?.toLowerCase().includes('human');
+            itemSource = isHuman ? 'HUMAN' : 'AI';
+          }
 
-        let itemSource: SourceType = 'AI';
-        if (targetUploadGroup === 'AI') {
-          itemSource = 'AI';
-        } else if (targetUploadGroup === 'HUMAN') {
-          itemSource = 'HUMAN';
-        } else {
-          const isHuman = file.name.toLowerCase().includes('human') || file.webkitRelativePath?.toLowerCase().includes('human');
-          itemSource = isHuman ? 'HUMAN' : 'AI';
+          formData.append('targetGroup', itemSource);
+          formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          const data = await res.json();
+          if (data.success && data.mediaItem) {
+            addedItems.push(data.mediaItem);
+          } else {
+            // Fallback to ObjectURL if server upload fails
+            const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|avi|mkv)$/i);
+            addedItems.push({
+              id: `file-media-${Date.now()}-${idx}`,
+              title: file.name.replace(/\.[^/.]+$/, ''),
+              url: URL.createObjectURL(file),
+              type: isVideo ? 'VIDEO' : 'IMAGE',
+              source: itemSource,
+              attribution: itemSource === 'AI' ? 'Stored locally in /media/AI' : 'Stored locally in /media/HUMAN',
+              category: 'Local Upload',
+              difficulty: 'Medium',
+              createdDate: new Date().toISOString().slice(0, 10),
+              fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            });
+          }
+        } catch (err) {
+          console.error('Failed to save file to local disk:', err);
         }
-
-        addedItems.push({
-          id: `file-media-${Date.now()}-${idx}`,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          url: URL.createObjectURL(file),
-          type: isVideo ? 'VIDEO' : 'IMAGE',
-          source: itemSource,
-          attribution: itemSource === 'AI' ? 'Uploaded AI Content' : 'Uploaded Human Content',
-          category: 'Uploaded',
-          difficulty: 'Medium',
-          createdDate: new Date().toISOString().slice(0, 10),
-          fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-        });
       }
     }
 
     if (addedItems.length > 0) {
       store.bulkAddMedia(addedItems);
-      showNotification(`✅ Successfully added ${addedItems.length} media item(s) into /${targetUploadGroup === 'AUTO' ? 'DETECTED' : targetUploadGroup}!`);
+      showNotification(`✅ Successfully saved ${addedItems.length} media file(s) directly to local hard drive!`);
     } else {
       showNotification('⚠️ No valid image or video files found in selection.');
     }
@@ -242,7 +273,7 @@ export default function AdminDashboardPage() {
       url,
       type,
       source,
-      attribution: attribution || (source === 'AI' ? 'Generated with AI' : 'Captured by Photographer'),
+      attribution: attribution || (source === 'AI' ? 'Stored locally in /media/AI' : 'Stored locally in /media/HUMAN'),
       category,
       difficulty: 'Medium',
       createdDate: new Date().toISOString().slice(0, 10),
@@ -325,22 +356,37 @@ export default function AdminDashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-2xl">
           <div>
             <span className="text-xs font-black px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-widest">
-              ADMIN STUDIO & MEDIA ENGINE
+              LOCAL DISK STORAGE & MEDIA ENGINE
             </span>
             <h1 className="text-3xl font-black font-display text-white mt-1">
-              QUIZ CONTROL & CUSTOMIZATION
+              QUIZ CONTROL & LOCAL DISK MANAGEMENT
             </h1>
             <p className="text-xs text-slate-400 font-medium">
-              Manage teams, custom logos, media uploads, and generate tournament reports.
+              100% Zero-Database local disk storage. Files are loaded & saved directly on your local hard drive.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleScanLocalDisk}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs flex items-center gap-2 cursor-pointer"
+              title="Scan public/media/AI and public/media/HUMAN disk folders"
+            >
+              <FolderSearch className="w-4 h-4" /> Scan Local Disk Folders
+            </button>
+
+            <button
+              onClick={handleLoad50AIPack}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg hover:scale-103 transition-transform"
+            >
+              <Package className="w-4 h-4" /> Load 50 Hyperrealistic AI Photos
+            </button>
+
             <Link
               href="/admin/analytics"
               className="px-4 py-2.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center gap-2 cursor-pointer"
             >
-              <BarChart2 className="w-4 h-4" /> Full Analytics
+              <BarChart2 className="w-4 h-4" /> Analytics
             </Link>
 
             <button
@@ -348,13 +394,6 @@ export default function AdminDashboardPage() {
               className="px-4 py-2.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 font-bold text-xs flex items-center gap-2 cursor-pointer"
             >
               <Download className="w-4 h-4" /> Export CSV
-            </button>
-
-            <button
-              onClick={() => generatePrintableReport(store.quizTitle, store.teams, store.mediaList, store.submissions)}
-              className="px-4 py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold text-xs flex items-center gap-2 cursor-pointer"
-            >
-              <FileText className="w-4 h-4" /> Printable PDF Report
             </button>
           </div>
         </div>
@@ -366,7 +405,7 @@ export default function AdminDashboardPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-cyan-400" />
-              <span className="text-sm font-bold text-white">TARGET UPLOAD GROUP DESTINATION:</span>
+              <span className="text-sm font-bold text-white">TARGET LOCAL DISK DESTINATION:</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -387,7 +426,7 @@ export default function AdminDashboardPage() {
                   targetUploadGroup === 'AI' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'bg-slate-800 text-cyan-400 hover:bg-slate-700'
                 }`}
               >
-                <Bot className="w-3.5 h-3.5 inline mr-1" /> Force /AI Group
+                <Bot className="w-3.5 h-3.5 inline mr-1" /> Force /media/AI Folder
               </button>
 
               <button
@@ -397,7 +436,7 @@ export default function AdminDashboardPage() {
                   targetUploadGroup === 'HUMAN' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'bg-slate-800 text-emerald-400 hover:bg-slate-700'
                 }`}
               >
-                <UserCheck className="w-3.5 h-3.5 inline mr-1" /> Force /HUMAN Group
+                <UserCheck className="w-3.5 h-3.5 inline mr-1" /> Force /media/HUMAN Folder
               </button>
             </div>
           </div>
@@ -415,10 +454,10 @@ export default function AdminDashboardPage() {
           >
             <UploadCloud className="w-14 h-14 text-cyan-400 mx-auto mb-3 group-hover:scale-110 transition-transform" />
             <h3 className="text-xl font-bold font-display text-white group-hover:text-cyan-300 transition-colors">
-              CLICK TO SELECT OR DRAG & DROP MEDIA (ZIP, FOLDERS, IMAGES, VIDEOS)
+              CLICK TO SELECT OR DRAG & DROP MEDIA (SAVED DIRECTLY TO LOCAL HARD DRIVE)
             </h3>
             <p className="text-xs text-slate-400 mt-1 max-w-xl mx-auto">
-              Click here to open file dialog or drag JPG, PNG, WEBP, MP4, WEBM, MOV files or ZIP archives directly. Uploading to: <span className="text-cyan-400 font-bold uppercase">/{targetUploadGroup} Group</span>.
+              Click to open file picker or drag JPG, PNG, WEBP, MP4, WEBM files directly. Uploads are saved to local hard drive in <span className="text-cyan-400 font-bold uppercase">public/media/{targetUploadGroup === 'HUMAN' ? 'HUMAN' : 'AI'}</span>.
             </p>
           </div>
         </div>
@@ -794,7 +833,7 @@ export default function AdminDashboardPage() {
 
                     <div className="flex items-center justify-between pt-2 text-[11px] text-slate-500 border-t border-slate-800 font-semibold">
                       <span>Category: {item.category}</span>
-                      <span>Size: {item.fileSize || '3.5 MB'}</span>
+                      <span>Size: {item.fileSize || 'Local File'}</span>
                     </div>
                   </div>
                 </motion.div>

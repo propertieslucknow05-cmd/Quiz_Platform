@@ -79,6 +79,7 @@ interface QuizStoreActions {
   showWinner: () => void;
   resetQuiz: () => void;
 
+  scanLocalDiskFolders: () => Promise<number>;
   shuffleMediaList: () => void;
   addMediaItem: (item: MediaItem) => void;
   updateMediaItem: (id: string, item: Partial<MediaItem>) => void;
@@ -113,6 +114,28 @@ export const useQuizStore = create<GameState & QuizStoreActions>((set, get) => (
   submissions: {},
   reactions: [],
   settings: INITIAL_SETTINGS,
+
+  scanLocalDiskFolders: async () => {
+    try {
+      const res = await fetch('/api/local-media');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.mediaList) && data.mediaList.length > 0) {
+        set(state => {
+          // Merge local files avoiding duplicate URLs
+          const existingUrls = new Set(state.mediaList.map(m => m.url));
+          const newItems = data.mediaList.filter((m: MediaItem) => !existingUrls.has(m.url));
+          return {
+            mediaList: [...newItems, ...state.mediaList]
+          };
+        });
+        return data.mediaList.length;
+      }
+      return 0;
+    } catch (err) {
+      console.error('Failed to scan local disk folders:', err);
+      return 0;
+    }
+  },
 
   startQuiz: () => {
     const { mediaList, settings, teams } = get();
