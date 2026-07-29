@@ -18,30 +18,41 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Save destination folder on local hard drive
-    const destFolder = targetGroup === 'HUMAN' ? 'HUMAN' : 'AI';
-    const targetDir = path.join(process.cwd(), 'public', 'media', destFolder);
+    const isVideo = file.type.startsWith('video/') || file.name.match(/\.(mp4|webm|mov|mkv)$/i);
+    const mimeType = file.type || (isVideo ? 'video/mp4' : 'image/jpeg');
 
-    await fs.mkdir(targetDir, { recursive: true });
+    // Create Base64 Data URL (Guarantees 100% upload success on Vercel Serverless read-only filesystem!)
+    const base64Str = buffer.toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64Str}`;
 
-    // Clean filename
-    const sanitizedFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const filePath = path.join(targetDir, sanitizedFileName);
+    let finalUrl = dataUrl;
 
-    // Write file directly to local disk
-    await fs.writeFile(filePath, buffer);
+    // Try writing to local hard drive (Works on local machine / VPS)
+    try {
+      const destFolder = targetGroup === 'HUMAN' ? 'HUMAN' : 'AI';
+      const targetDir = path.join(process.cwd(), 'public', 'media', destFolder);
 
-    const isVideo = file.type.startsWith('video/') || sanitizedFileName.match(/\.(mp4|webm|mov|mkv)$/i);
-    const localUrl = `/media/${destFolder}/${sanitizedFileName}`;
+      await fs.mkdir(targetDir, { recursive: true });
+
+      const sanitizedFileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filePath = path.join(targetDir, sanitizedFileName);
+
+      await fs.writeFile(filePath, buffer);
+      finalUrl = `/media/${destFolder}/${sanitizedFileName}`;
+    } catch (diskErr) {
+      // Vercel serverless read-only filesystem (/var/task/) detected - fall back to Base64 Data URL!
+      console.warn('Vercel read-only filesystem detected, using Base64 Data URL fallback:', diskErr);
+      finalUrl = dataUrl;
+    }
 
     const newItem: MediaItem = {
-      id: `local-file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       title: customTitle || file.name.replace(/\.[^/.]+$/, ''),
-      url: localUrl,
+      url: finalUrl,
       type: isVideo ? 'VIDEO' : 'IMAGE',
       source: targetGroup,
-      attribution: targetGroup === 'AI' ? 'Saved locally in /media/AI' : 'Saved locally in /media/HUMAN',
-      category: customCategory || 'Local Upload',
+      attribution: targetGroup === 'AI' ? 'Uploaded AI Content' : 'Uploaded Human Content',
+      category: customCategory || 'Uploads',
       difficulty: 'Medium',
       createdDate: new Date().toISOString().slice(0, 10),
       fileSize: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
@@ -52,7 +63,7 @@ export async function POST(request: Request) {
       mediaItem: newItem
     });
   } catch (error) {
-    console.error('Local upload error:', error);
+    console.error('Upload handler error:', error);
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }

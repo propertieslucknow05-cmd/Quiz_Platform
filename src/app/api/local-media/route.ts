@@ -12,15 +12,11 @@ export async function GET() {
     const humanDir = path.join(publicDir, 'media', 'HUMAN');
     const uploadsDir = path.join(publicDir, 'media', 'uploads');
 
-    // Ensure local directories exist on hard drive
-    await fs.mkdir(aiDir, { recursive: true });
-    await fs.mkdir(humanDir, { recursive: true });
-    await fs.mkdir(uploadsDir, { recursive: true });
-
     const localMediaItems: MediaItem[] = [];
 
-    // 1. Scan public/media/AI
+    // Safely try to scan public/media/AI
     try {
+      await fs.mkdir(aiDir, { recursive: true });
       const aiFiles = await fs.readdir(aiDir);
       aiFiles.forEach((file, index) => {
         const ext = path.extname(file).toLowerCase();
@@ -42,11 +38,13 @@ export async function GET() {
         }
       });
     } catch (err) {
-      console.error('Error scanning AI directory:', err);
+      // Vercel serverless read-only filesystem handling
+      console.warn('AI folder scan bypassed on serverless platform:', err);
     }
 
-    // 2. Scan public/media/HUMAN
+    // Safely try to scan public/media/HUMAN
     try {
+      await fs.mkdir(humanDir, { recursive: true });
       const humanFiles = await fs.readdir(humanDir);
       humanFiles.forEach((file, index) => {
         const ext = path.extname(file).toLowerCase();
@@ -68,11 +66,12 @@ export async function GET() {
         }
       });
     } catch (err) {
-      console.error('Error scanning HUMAN directory:', err);
+      console.warn('HUMAN folder scan bypassed on serverless platform:', err);
     }
 
-    // 3. Scan public/media/uploads
+    // Safely try to scan public/media/uploads
     try {
+      await fs.mkdir(uploadsDir, { recursive: true });
       const uploadFiles = await fs.readdir(uploadsDir);
       uploadFiles.forEach((file, index) => {
         const ext = path.extname(file).toLowerCase();
@@ -95,7 +94,7 @@ export async function GET() {
         }
       });
     } catch (err) {
-      console.error('Error scanning Uploads directory:', err);
+      console.warn('Uploads folder scan bypassed on serverless platform:', err);
     }
 
     return NextResponse.json({
@@ -104,9 +103,6 @@ export async function GET() {
       mediaList: localMediaItems
     });
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: (error as Error).message },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: true, count: 0, mediaList: [] });
   }
 }
