@@ -113,6 +113,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       timerTargetTimeMs: null,
       isTimerRunning: false,
       mediaList: SEED_MEDIA_ITEMS,
+      deletedUrls: [],
       teams: INITIAL_TEAMS,
       activeTeamId: INITIAL_TEAMS[0].id,
       submissions: {},
@@ -120,7 +121,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       settings: INITIAL_SETTINGS,
 
       restoreDefaultMediaLibrary: () => {
-        set({ mediaList: SEED_MEDIA_ITEMS, currentQuestionIndex: 0 });
+        set({ mediaList: SEED_MEDIA_ITEMS, deletedUrls: [], currentQuestionIndex: 0 });
       },
 
       scanLocalDiskFolders: async () => {
@@ -130,7 +131,13 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
           if (data.success && Array.isArray(data.mediaList) && data.mediaList.length > 0) {
             set(state => {
               const existingUrls = new Set(state.mediaList.map(m => m.url));
-              const newItems = data.mediaList.filter((m: MediaItem) => !existingUrls.has(m.url));
+              const deletedSet = new Set(state.deletedUrls);
+              
+              // Filter out items that are already in list OR have been deleted
+              const newItems = data.mediaList.filter((m: MediaItem) => 
+                !existingUrls.has(m.url) && !deletedSet.has(m.url) && !deletedSet.has(m.id)
+              );
+
               return {
                 mediaList: [...newItems, ...state.mediaList]
               };
@@ -415,17 +422,27 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
         mediaList: state.mediaList.map(i => i.id === id ? { ...i, ...updates } : i)
       })),
 
-      deleteMediaItem: (id: string) => set(state => ({
-        mediaList: state.mediaList.filter(i => i.id !== id)
-      })),
+      deleteMediaItem: (id: string) => set(state => {
+        const target = state.mediaList.find(i => i.id === id);
+        const newDeletedUrls = target ? [...state.deletedUrls, target.url, target.id] : state.deletedUrls;
+        return {
+          mediaList: state.mediaList.filter(i => i.id !== id),
+          deletedUrls: newDeletedUrls
+        };
+      }),
 
       bulkAddMedia: (items: MediaItem[]) => set(state => ({
         mediaList: [...items, ...state.mediaList]
       })),
 
-      bulkDeleteMedia: (ids: string[]) => set(state => ({
-        mediaList: state.mediaList.filter(i => !ids.includes(i.id))
-      })),
+      bulkDeleteMedia: (ids: string[]) => set(state => {
+        const targets = state.mediaList.filter(i => ids.includes(i.id));
+        const deletedAdditions = targets.flatMap(t => [t.url, t.id]);
+        return {
+          mediaList: state.mediaList.filter(i => !ids.includes(i.id)),
+          deletedUrls: [...state.deletedUrls, ...deletedAdditions]
+        };
+      }),
 
       bulkUpdateSource: (ids: string[], source: SourceType) => set(state => ({
         mediaList: state.mediaList.map(i => ids.includes(i.id) ? { ...i, source } : i)
@@ -521,10 +538,11 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       importFullState: (newState: GameState) => set(newState)
     }),
     {
-      name: 'quiz_platform_storage_v2',
+      name: 'quiz_platform_storage_v3',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         mediaList: state.mediaList,
+        deletedUrls: state.deletedUrls,
         teams: state.teams,
         settings: state.settings,
         quizTitle: state.quizTitle

@@ -228,8 +228,26 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleDeleteSingleMedia = (item: MediaItem) => {
+    store.deleteMediaItem(item.id);
+    fetch('/api/delete-media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: item.url })
+    }).catch(() => {});
+    showNotification(`✅ Deleted "${item.title}"`);
+  };
+
   const handleBulkDelete = () => {
     if (selectedMediaIds.length === 0) return;
+    const targetItems = store.mediaList.filter(m => selectedMediaIds.includes(m.id));
+    targetItems.forEach(item => {
+      fetch('/api/delete-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url })
+      }).catch(() => {});
+    });
     store.bulkDeleteMedia(selectedMediaIds);
     showNotification(`✅ Deleted ${selectedMediaIds.length} media items`);
     setSelectedMediaIds([]);
@@ -829,7 +847,7 @@ export default function AdminDashboardPage() {
                       </button>
 
                       <button
-                        onClick={() => store.deleteMediaItem(item.id)}
+                        onClick={() => handleDeleteSingleMedia(item)}
                         className="p-2 rounded-full bg-slate-950/80 text-slate-400 hover:text-rose-400 border border-slate-700 transition-colors cursor-pointer"
                         title="Delete Media"
                       >

@@ -84,6 +84,7 @@ export interface GameState {
   timerTargetTimeMs?: number | null;
   isTimerRunning: boolean;
   mediaList: MediaItem[];
+  deletedUrls: string[];
   teams: Team[];
   activeTeamId?: string;
   submissions: Record<number, Record<string, AnswerSubmission>>;
