@@ -538,7 +538,7 @@ export const useQuizStore = create<GameState & QuizStoreActions>()(
       importFullState: (newState: GameState) => set(newState)
     }),
     {
-      name: 'quiz_platform_storage_v3',
+      name: 'quiz_platform_storage_v4',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         mediaList: state.mediaList,
