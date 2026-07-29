@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-outfit: 'Outfit', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-slate-950 font-sans;
+    font-family: var(--font-inter);
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0284c7;
+}
+
+/* Neon Glow Utility Classes */
+.glow-cyan {
+  box-shadow: 0 0 25px rgba(0, 243, 255, 0.4);
+}
+.glow-magenta {
+  box-shadow: 0 0 25px rgba(255, 0, 160, 0.4);
+}
+.glow-gold {
+  box-shadow: 0 0 25px rgba(251, 191, 36, 0.4);
+}
+.glow-emerald {
+  box-shadow: 0 0 25px rgba(0, 255, 102, 0.4);
+}
