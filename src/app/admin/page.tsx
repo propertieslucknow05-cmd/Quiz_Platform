@@ -376,6 +376,17 @@ export default function AdminDashboardPage() {
             </button>
 
             <button
+              onClick={() => {
+                store.restoreDefaultMediaLibrary();
+                showNotification('🔄 Restored default 120 library items!');
+              }}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-extrabold text-xs flex items-center gap-2 cursor-pointer"
+              title="Restore factory default 120 library items"
+            >
+              <RefreshCw className="w-4 h-4 text-cyan-400" /> Restore Default 120 Library
+            </button>
+
+            <button
               onClick={handleLoad50AIPack}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer shadow-lg hover:scale-103 transition-transform"
             >
